@@ -1,0 +1,33 @@
+# ${HOME}\prototype\adams\adams-manuel-test.flow
+#
+adams.flow.control.Flow
+	-actor
+		adams.flow.standalone.GlobalActors
+			-actor
+				adams.flow.source.MOAClassifierSetup
+					-name
+					MOAClassifier
+					-classifier
+					moa.classifiers.trees.HoeffdingTree
+	-actor
+		adams.flow.source.MOAStream
+			-stream
+			moa.streams.generators.RandomRBFGenerator
+			-num-examples
+			1000
+	-actor
+		adams.flow.transformer.TemplateTransformer
+			-template
+				adams.flow.template.MyTransformer
+					-trainingFile
+					${HOME}\prototype\RandomRBF-1k.arff
+	-actor
+		adams.flow.transformer.MOAClassifierEvaluation
+			-output-interval
+			1000
+	-actor
+		adams.flow.transformer.MOALearningEvaluation
+	-actor
+		adams.flow.sink.Console
+	-flow-execution-listener
+		adams.flow.execution.NullListener

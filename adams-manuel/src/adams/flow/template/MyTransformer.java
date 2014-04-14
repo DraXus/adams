@@ -19,22 +19,32 @@
  */
 package adams.flow.template;
 
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
+import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Random;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import weka.core.Instances;
+import weka.filters.Filter;
 import adams.core.ClassLister;
 import adams.core.base.BaseRegExp;
 import adams.core.base.BaseString;
 import adams.core.io.PlaceholderFile;
-import adams.core.option.OptionUtils;
 import adams.data.conversion.SpreadSheetToWekaInstances;
 import adams.data.io.input.CsvSpreadSheetReader;
 import adams.data.spreadsheet.SpreadSheet;
 import adams.env.Environment;
-import adams.flow.control.Flow;
+import adams.flow.control.SubProcess;
 import adams.flow.core.AbstractActor;
-import adams.flow.sink.Display;
 import adams.flow.source.StringConstants;
+import adams.flow.transformer.WekaFilter;
 
 public class MyTransformer extends AbstractActorTemplate {
 
@@ -181,14 +191,62 @@ public class MyTransformer extends AbstractActorTemplate {
 						+ Arrays.toString(numMissingValuesByRow)),
 				new BaseString("missingValuesByColumn = "
 						+ Arrays.toString(numMissingValuesByColumn)) });
-		Display report = new Display();
+		// Console report = new Console();
 
-		listClasses();
+		// listClasses();
+		// listFilters();
 
-		// 3. Generate workflow based on the data characteristics
-		Flow flow = new Flow();
-		flow.setActors(new AbstractActor[] { characteristics, report });
-		return flow;
+		List<Class<?>> classes = null;
+		try {
+			classes = findWekaClasses();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		// 3. Generate workflow based on data characteristics
+		// TODO currently it generates a random sequence of filters
+		int numOfFilters = 2;
+		WekaFilter[] filterList = getRandomFilters(classes, numOfFilters);
+		SubProcess seq = new SubProcess();
+
+		for (int i = 0; i < numOfFilters; i++) {
+			seq.add(i, filterList[i]);
+		}
+
+		return seq;
+	}
+
+	/**
+	 * Generates a random list of Weka filters
+	 * 
+	 * @param classes
+	 *            List of all available weka filters
+	 * @param numOfFilters
+	 *            Size of the list to generate
+	 * @return random list of Weka filters
+	 */
+	private WekaFilter[] getRandomFilters(List<Class<?>> classes,
+			int numOfFilters) {
+		WekaFilter[] filterList = new WekaFilter[numOfFilters];
+
+		for (int i = 0; i < numOfFilters; i++) {
+			int randomNumber = randInt(0, classes.size());
+			try {
+				Filter randomFilter = (Filter) classes.get(randomNumber)
+						.newInstance();
+				System.out.println(randomFilter.toString());
+				filterList[i] = new WekaFilter();
+				filterList[i].setFilter(randomFilter);
+			} catch (InstantiationException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IllegalAccessException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		return filterList;
 	}
 
 	/**
@@ -239,10 +297,14 @@ public class MyTransformer extends AbstractActorTemplate {
 			Environment.setEnvironmentClass(cls);
 
 			// match
-			String match = ".*\\.transformer\\..*";
+			// String match = ".*\\.transformer\\..*";
+			String match = "adams\\.flow\\.transformer\\.Weka.*";
 			if (match == null)
 				match = BaseRegExp.MATCH_ALL;
 			BaseRegExp regexp = new BaseRegExp(match);
+
+			Class[] implementedFilters = weka.filters.Filter.class
+					.getDeclaredClasses();
 
 			// allow empty class hierarchies?
 			boolean allowEmpty = false;
@@ -250,6 +312,7 @@ public class MyTransformer extends AbstractActorTemplate {
 			// superclass
 			String[] superclasses;
 			String sclass = "adams.flow.core.AbstractActor";
+			// String sclass = null;
 			if (sclass == null)
 				superclasses = m_ClassLister.getSuperclasses();
 			else
@@ -273,6 +336,95 @@ public class MyTransformer extends AbstractActorTemplate {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+
+	private void listFilters() {
+		List<Class<?>> classes;
+		try {
+			classes = findWekaClasses();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return;
+		}
+		for (Class<?> cl : classes) {
+			try {
+				System.out.println(cl.getName());
+			} catch (Throwable t) { // ignore problematic methods and continue
+				t.printStackTrace();
+				break;
+			}
+		}
+	}
+
+	/**
+	 * Find the available Weka filters in the jar file
+	 * @return list wit the available Weka filters
+	 * @throws IOException
+	 * @throws ClassNotFoundException
+	 */
+	private List<Class<?>> findWekaClasses() throws IOException,
+			ClassNotFoundException {
+		String wekaJarPath = weka.filters.Filter.class.getProtectionDomain()
+				.getCodeSource().getLocation().toString();
+		wekaJarPath = URLDecoder.decode(wekaJarPath, "UTF-8").replace("file:",
+				"");
+		JarFile wekaJar = new JarFile(wekaJarPath);
+		Enumeration<JarEntry> contents = wekaJar.entries();
+		List<Class<?>> wekaClasses = new ArrayList<Class<?>>(50);
+		int badModifiers = Modifier.ABSTRACT | Modifier.INTERFACE
+				| Modifier.PRIVATE | Modifier.PROTECTED;
+		while (contents.hasMoreElements()) {
+			JarEntry entry = contents.nextElement();
+			String name = entry.getName();
+			if (validClassFile(name)) {
+				String className = name.substring(0, name.length() - 6)
+						.replaceAll("/", ".");
+				Class<?> wekaClass = Class.forName(className);
+				if (((wekaClass.getModifiers() & badModifiers) == 0)
+						&& weka.filters.Filter.class
+								.isAssignableFrom(wekaClass)
+						&& hasDefaultConstructor(wekaClass))
+					wekaClasses.add(wekaClass);
+			}
+		}
+		wekaJar.close();
+		return wekaClasses;
+	}
+
+	private boolean hasDefaultConstructor(Class<?> wekaClass) {
+		for (Constructor<?> c : wekaClass.getConstructors())
+			if (c.getParameterTypes().length == 0)
+				return true;
+		return false;
+	}
+
+	private boolean validClassFile(String name) {
+		return name.startsWith("weka/filters/") && name.endsWith(".class")
+				&& !name.contains("$");
+	}
+
+	/**
+	 * Returns a pseudo-random number between min and max, inclusive. The
+	 * difference between min and max can be at most
+	 * <code>Integer.MAX_VALUE - 1</code>.
+	 * 
+	 * @param min
+	 *            Minimum value
+	 * @param max
+	 *            Maximum value. Must be greater than min.
+	 * @return Integer between min and max, inclusive.
+	 * @see java.util.Random#nextInt(int)
+	 */
+	public static int randInt(int min, int max) {
+
+		// Usually this can be a field rather than a method variable
+		Random rand = new Random();
+
+		// nextInt is normally exclusive of the top value,
+		// so add 1 to make it inclusive
+		int randomNum = rand.nextInt((max - min) + 1) + min;
+
+		return randomNum;
 	}
 
 }
