@@ -2,11 +2,9 @@
 #
 adams.flow.control.Flow
 	-actor
-		adams.flow.standalone.GlobalActors
+		adams.flow.standalone.CallableActors
 			-actor
 				adams.flow.source.MOAClassifierSetup
-					-name
-					MOAClassifier
 					-classifier
 					moa.classifiers.trees.HoeffdingTree
 	-actor
@@ -20,9 +18,11 @@ adams.flow.control.Flow
 			-template
 				adams.flow.template.MyTransformer
 					-trainingFile
-					${HOME}\prototype\RandomRBF-1k.arff
+					${HOME}\prototype\RandomRBF-1k-training.csv
 	-actor
 		adams.flow.transformer.MOAClassifierEvaluation
+			-classifier
+			MOAClassifierSetup
 			-output-interval
 			1000
 	-actor

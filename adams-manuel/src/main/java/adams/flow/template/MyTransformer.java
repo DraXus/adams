@@ -162,6 +162,7 @@ public class MyTransformer extends AbstractActorTemplate {
 	 */
 	@Override
 	protected AbstractActor doGenerate() {
+		System.out.println("Generating filter flow automatically...");
 		// 1. Read file
 		// TODO Extend to other types of files
 		SpreadSheet sheet = m_CsvReader.read(m_TrainingFile);
@@ -169,9 +170,12 @@ public class MyTransformer extends AbstractActorTemplate {
 		// Converting to Weka format to use Weka methods
 		SpreadSheetToWekaInstances m_Conversion = new SpreadSheetToWekaInstances();
 		m_Conversion.setInput(sheet);
-		String out = m_Conversion.convert();
-		if (out != null)
-			return null; // TODO throw conversion error
+		try {
+			String out = m_Conversion.convert();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
 
 		Instances m_Data = (Instances) m_Conversion.getOutput();
 		m_Conversion.cleanUp();
@@ -212,6 +216,8 @@ public class MyTransformer extends AbstractActorTemplate {
 		for (int i = 0; i < numOfFilters; i++) {
 			seq.add(i, filterList[i]);
 		}
+
+		System.out.println("Flow generated succesfully");
 
 		return seq;
 	}
@@ -358,6 +364,7 @@ public class MyTransformer extends AbstractActorTemplate {
 
 	/**
 	 * Find the available Weka filters in the jar file
+	 * 
 	 * @return list wit the available Weka filters
 	 * @throws IOException
 	 * @throws ClassNotFoundException
