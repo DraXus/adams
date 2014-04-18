@@ -22,126 +22,138 @@ package adams.flow.template;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
+import adams.core.io.PlaceholderFile;
 import adams.env.Environment;
 import adams.flow.AbstractFlowTest;
 import adams.flow.control.Flow;
 import adams.flow.core.AbstractActor;
 import adams.flow.core.CallableActorReference;
-import adams.flow.core.GlobalActorReference;
 import adams.flow.sink.DumpFile;
 import adams.flow.source.FileSupplier;
 import adams.flow.source.WekaClassifierSetup;
 import adams.flow.standalone.CallableActors;
+import adams.flow.transformer.TemplateTransformer;
 import adams.flow.transformer.WekaClassSelector;
 import adams.flow.transformer.WekaCrossValidationEvaluator;
 import adams.flow.transformer.WekaEvaluationSummary;
 import adams.flow.transformer.WekaFileReader;
 import adams.flow.transformer.WekaFileReader.OutputType;
+import adams.test.AbstractTestHelper;
+import adams.test.TestHelper;
 import adams.test.TmpFile;
 
 /**
  * Tests the WekaEvaluationSummary actor.
- *
- * @author  fracpete (fracpete at waikato dot ac dot nz)
+ * 
+ * @author fracpete (fracpete at waikato dot ac dot nz)
  * @version $Revision: 8665 $
  */
-public class MyTransformerTest
-  extends AbstractFlowTest {
+public class MyTransformerTest extends AbstractFlowTest {
 
-  /**
-   * Initializes the test.
-   *
-   * @param name	the name of the test
-   */
-  public MyTransformerTest(String name) {
-    super(name);
-  }
+	final private String inputFile = "RandomRBF-1k.arff";
+	final private String trainingFile = "RandomRBF-1k-copy.csv";
+	final private String outputFile = "dumpfile.txt";
 
-  /**
-   * Called by JUnit before each test method.
-   *
-   * @throws Exception if an error occurs
-   */
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
+	/**
+	 * Initializes the test.
+	 * 
+	 * @param name
+	 *            the name of the test
+	 */
+	public MyTransformerTest(String name) {
+		super(name);
+	}
 
-    m_TestHelper.copyResourceToTmp("vote.arff");
-    m_TestHelper.deleteFileFromTmp("dumpfile.txt");
-  }
+	/**
+	 * Called by JUnit before each test method.
+	 * 
+	 * @throws Exception
+	 *             if an error occurs
+	 */
+	@Override
+	protected void setUp() throws Exception {
+		super.setUp();
 
-  /**
-   * Called by JUnit after each test method.
-   *
-   * @throws Exception	if tear-down fails
-   */
-  @Override
-  protected void tearDown() throws Exception {
-    m_TestHelper.deleteFileFromTmp("vote.arff");
-    m_TestHelper.deleteFileFromTmp("dumpfile.txt");
+		m_TestHelper.copyResourceToTmp(inputFile);
+		m_TestHelper.copyResourceToTmp(trainingFile);
+		m_TestHelper.deleteFileFromTmp(outputFile);
+	}
 
-    super.tearDown();
-  }
+	/**
+	 * Called by JUnit after each test method.
+	 * 
+	 * @throws Exception
+	 *             if tear-down fails
+	 */
+	@Override
+	protected void tearDown() throws Exception {
+		m_TestHelper.deleteFileFromTmp(inputFile);
+		m_TestHelper.deleteFileFromTmp(trainingFile);
+		m_TestHelper.deleteFileFromTmp(outputFile);
 
-  /**
-   * Used to create an instance of a specific actor.
-   *
-   * @return a suitably configured <code>AbstractActor</code> value
-   */
-  @Override
-  public AbstractActor getActor() {
-    WekaClassifierSetup cls = new WekaClassifierSetup();
-    cls.setName("cls");
-    cls.setClassifier(new weka.classifiers.trees.J48());
+		super.tearDown();
+	}
 
-    CallableActors ga = new CallableActors();
-    ga.setActors(new AbstractActor[]{cls});
+	/**
+	 * Used to create an instance of a specific actor.
+	 * 
+	 * @return a suitably configured <code>AbstractActor</code> value
+	 */
+	public AbstractActor getActor() {
+		System.out.println("getting actor");
+		WekaClassifierSetup cls = new WekaClassifierSetup();
+		cls.setName("cls");
+		cls.setClassifier(new weka.classifiers.trees.J48());
 
-    FileSupplier sfs = new FileSupplier();
-    sfs.setFiles(new adams.core.io.PlaceholderFile[]{new TmpFile("vote.arff")});
+		CallableActors ga = new CallableActors();
+		ga.setActors(new AbstractActor[] { cls });
 
-    WekaFileReader fr = new WekaFileReader();
-    fr.setOutputType(OutputType.DATASET);
+		FileSupplier sfs = new FileSupplier();
+		 sfs.setFiles(new adams.core.io.PlaceholderFile[]{new
+		 TmpFile(inputFile)});
 
-    WekaClassSelector cs = new WekaClassSelector();
+		WekaFileReader fr = new WekaFileReader();
+		fr.setOutputType(OutputType.DATASET);
 
-    WekaCrossValidationEvaluator cv = new WekaCrossValidationEvaluator();
-    cv.setClassifier(new GlobalActorReference("cls"));
+		WekaClassSelector cs = new WekaClassSelector();
 
-    WekaEvaluationSummary eval = new WekaEvaluationSummary();
-    DumpFile df = new DumpFile();
-    df.setOutputFile(new TmpFile("dumpfile.txt"));
+		MyTransformer tr = new MyTransformer();
+		tr.setTrainingFile(new TmpFile(trainingFile));
 
-    Flow flow = new Flow();
-    flow.setActors(new AbstractActor[]{ga, sfs, fr, cs, cv, eval, df});
+		TemplateTransformer template = new TemplateTransformer();
+		template.setTemplate(tr);
 
-    return flow;
-  }
+		WekaCrossValidationEvaluator cv = new WekaCrossValidationEvaluator();
+		cv.setClassifier(new CallableActorReference("cls"));
 
-  /**
-   * Performs a regression test, comparing against previously generated output.
-   */
-  public void testRegression() {
-    performRegressionTest(
-	new TmpFile("dumpfile.txt"));
-  }
+		WekaEvaluationSummary eval = new WekaEvaluationSummary();
+		DumpFile df = new DumpFile();
+		df.setOutputFile(new TmpFile(outputFile));
 
-  /**
-   * Returns a test suite.
-   *
-   * @return		the test suite
-   */
-  public static Test suite() {
-    return new TestSuite(MyTransformerTest.class);
-  }
+		Flow flow = new Flow();
+		flow.setActors(new AbstractActor[] { ga, sfs, fr, cs, template, cv,
+				eval, df });
 
-  /**
-   * Runs the test from commandline.
-   *
-   * @param args	ignored
-   */
-  public static void main(String[] args) {
-    Environment.setEnvironmentClass(Environment.class);
-    runTest(suite());
-  }
+		return flow;
+	}
+
+	/**
+	 * Returns a test suite.
+	 * 
+	 * @return the test suite
+	 */
+	public static Test suite() {
+		return new TestSuite(MyTransformerTest.class);
+	}
+
+	/**
+	 * Runs the test from commandline.
+	 * 
+	 * @param args
+	 *            ignored
+	 */
+	public static void main(String[] args) {
+		Environment.setEnvironmentClass(Environment.class);
+		runTest(suite());
+	}
 }
