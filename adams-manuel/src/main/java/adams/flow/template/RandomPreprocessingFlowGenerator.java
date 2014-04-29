@@ -30,9 +30,13 @@ import java.util.Random;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+import weka.core.Option;
+import weka.core.OptionHandler;
 import weka.filters.Filter;
+import adams.core.VariableName;
 import adams.flow.control.SubProcess;
 import adams.flow.core.AbstractActor;
+import adams.flow.transformer.SetVariable;
 import adams.flow.transformer.WekaFilter;
 
 public class RandomPreprocessingFlowGenerator extends AbstractActorTemplate {
@@ -106,7 +110,8 @@ public class RandomPreprocessingFlowGenerator extends AbstractActorTemplate {
 	 */
 	@Override
 	protected AbstractActor doGenerate() {
-		System.out.println("Generating filter flow automatically (filters = "+numOfFilters+")...");
+		System.out.println("Generating filter flow automatically (filters = "
+				+ numOfFilters + ")...");
 
 		if (numOfFilters <= 0) {
 			throw new IllegalStateException(
@@ -120,13 +125,31 @@ public class RandomPreprocessingFlowGenerator extends AbstractActorTemplate {
 			e.printStackTrace();
 		}
 
+		//listFilters(false);
+		//listFilters();
+
 		// Generates a random sequence of filters
 		WekaFilter[] filterList = getRandomFilters(classes, numOfFilters);
 		SubProcess seq = new SubProcess();
 
+		String filterNamesString = "";
+		
+		// Create sequence of filters
 		for (int i = 0; i < numOfFilters; i++) {
 			seq.add(i, filterList[i]);
+			filterNamesString += filterList[i].getFilter().toString() + ",";
 		}
+		// Remove last comma from the list
+		if(filterNamesString.endsWith(",")){
+			filterNamesString = filterNamesString.substring(0, filterNamesString.length()-1);
+		}
+		
+		// Create variable with the name of filters for log purposes
+		SetVariable filterNames = new SetVariable();
+		filterNames.setVariableName(new VariableName("filters"));
+		filterNames.setVariableValue(filterNamesString);
+		
+		seq.add(filterNames);
 
 		System.out.println("Flow generated succesfully");
 
@@ -166,7 +189,11 @@ public class RandomPreprocessingFlowGenerator extends AbstractActorTemplate {
 		return filterList;
 	}
 
-	private void listFilters() {
+	private void listFilters(){
+		listFilters(true);
+	}
+	
+	private void listFilters(boolean listOptions) {
 		List<Class<?>> classes;
 		try {
 			classes = findWekaClasses();
@@ -174,14 +201,43 @@ public class RandomPreprocessingFlowGenerator extends AbstractActorTemplate {
 			e.printStackTrace();
 			return;
 		}
+		int countParameters = 0;
 		for (Class<?> cl : classes) {
 			try {
 				System.out.println(cl.getName());
+				if(listOptions) countParameters += listParameters(cl);
 			} catch (Throwable t) { // ignore problematic methods and continue
 				t.printStackTrace();
 				break;
 			}
 		}
+		System.out.println("Number of filters: " + classes.size());
+		if(listOptions) System.out.println("Number of parameters: " + countParameters);
+	}
+
+	private int listParameters(Class<?> filter) {
+		if (OptionHandler.class.isAssignableFrom(filter)) {
+
+			try {
+				int counter = 0;
+				Enumeration<Option> options = ((OptionHandler) filter
+						.newInstance()).listOptions();
+				for (Option o = options.nextElement(); options
+						.hasMoreElements(); o = options.nextElement()) {
+					System.out.println(o.name() + " (" + o.numArguments()
+							+ ") " + o.description());
+					counter++;
+				}
+				return counter;
+			} catch (InstantiationException e) {
+				e.printStackTrace();
+			} catch (IllegalAccessException e) {
+				e.printStackTrace();
+			}
+
+		}
+		return 0;
+
 	}
 
 	/**

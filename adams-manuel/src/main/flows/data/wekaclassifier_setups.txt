@@ -3,3 +3,4 @@ weka.classifiers.trees.J48
 weka.classifiers.trees.HoeffdingTree
 weka.classifiers.functions.MultilayerPerceptron
 weka.classifiers.functions.SMO
+weka.classifiers.lazy.IBk

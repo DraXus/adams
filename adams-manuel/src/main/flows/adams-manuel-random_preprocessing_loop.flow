@@ -1,0 +1,126 @@
+# Project: adams
+# Date: 2014-04-29 16:01:06
+# User: Manuel
+#
+adams.flow.control.Flow
+	-actor
+		adams.flow.standalone.CallableActors
+			-actor
+				adams.flow.source.WekaClassifierSetup
+					-name
+					WekaClassifier
+					-classifier
+						weka.classifiers.trees.J48
+							-C
+							0.25
+							-M
+							2
+	-actor
+		adams.flow.source.ForLoop
+			-upper
+			2
+	-actor
+		adams.flow.control.Trigger
+			-tee
+				adams.flow.source.FileSupplier
+					-file
+					${HOME}\prototype\datasets\classification\iris.arff
+			-tee
+				adams.flow.control.Tee
+					-name
+					get dataset name
+					-tee
+						adams.flow.transformer.BaseName
+							-remove-extensions
+							true
+					-tee
+						adams.flow.transformer.SetVariable
+							-var-name
+							dataset
+			-tee
+				adams.flow.transformer.WekaFileReader
+					-loader
+						weka.core.converters.ArffLoader
+			-tee
+				adams.flow.transformer.WekaClassSelector
+			-tee
+				adams.flow.control.Continue
+					-condition
+						adams.flow.condition.bool.WekaCapabilities
+							-capability
+							NUMERIC_ATTRIBUTES
+							-capability
+							STRING_ATTRIBUTES
+							-capability
+							RELATIONAL_ATTRIBUTES
+							-capability
+							NUMERIC_CLASS
+							-capability
+							DATE_CLASS
+							-capability
+							STRING_CLASS
+							-capability
+							RELATIONAL_CLASS
+			-tee
+				adams.flow.transformer.TemplateTransformer
+					-template
+						adams.flow.template.RandomPreprocessingFlowGenerator
+							-num-filters
+							2
+			-tee
+				adams.flow.transformer.WekaCrossValidationEvaluator
+					-output
+						weka.classifiers.evaluation.output.prediction.Null
+					-classifier
+					WekaClassifier
+					-num-threads
+					-1
+			-tee
+				adams.flow.control.Tee
+					-tee
+						adams.flow.control.Tee
+							-name
+							Accuracy
+							-tee
+								adams.flow.transformer.WekaEvaluationValuePicker
+									-name
+									Get Accuracy
+							-tee
+								adams.flow.transformer.SetVariable
+									-name
+									Set Accuracy
+									-var-name
+									accuracy
+					-tee
+						adams.flow.control.Tee
+							-name
+							RMSE
+							-tee
+								adams.flow.transformer.WekaEvaluationValuePicker
+									-name
+									Get RMSE
+									-statistic
+									ROOT_MEAN_SQUARED_ERROR
+							-tee
+								adams.flow.transformer.SetVariable
+									-name
+									Set RMS
+									-var-name
+									rmse
+			-tee
+				adams.flow.control.Trigger
+					-name
+					generate output
+					-tee
+						adams.flow.source.CombineVariables
+							-expression
+							J48, @{filters}, @{dataset}, @{accuracy}, @{rmse}
+					-tee
+						adams.flow.sink.DumpFile
+							-output
+							${HOME}\prototype\datasets\classification\results\random_preprocessing_loop_summary.csv
+							-append
+							true
+	-flow-execution-listener
+		adams.flow.execution.NullListener
+
