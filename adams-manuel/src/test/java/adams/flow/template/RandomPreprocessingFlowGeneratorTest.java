@@ -20,6 +20,8 @@
 
 package adams.flow.template;
 
+import java.nio.channels.Pipe.SinkChannel;
+
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import adams.core.io.PlaceholderFile;
@@ -28,11 +30,13 @@ import adams.flow.AbstractFlowTest;
 import adams.flow.control.Flow;
 import adams.flow.core.AbstractActor;
 import adams.flow.core.CallableActorReference;
+import adams.flow.sink.Console;
 import adams.flow.sink.DumpFile;
 import adams.flow.source.FileSupplier;
 import adams.flow.source.WekaClassifierSetup;
 import adams.flow.standalone.CallableActors;
 import adams.flow.transformer.TemplateTransformer;
+import adams.flow.transformer.TemplateTransformerNoCache;
 import adams.flow.transformer.WekaClassSelector;
 import adams.flow.transformer.WekaCrossValidationEvaluator;
 import adams.flow.transformer.WekaEvaluationSummary;
@@ -48,7 +52,7 @@ import adams.test.TmpFile;
  * @author msalvador (msalvador at bournemouth.ac.uk)
  * @version $Revision: 8665 $
  */
-public class MyTransformerTest
+public class RandomPreprocessingFlowGeneratorTest
   extends AbstractFlowTest {
 
   final private String inputFile = "RandomRBF-1k.arff";
@@ -63,7 +67,7 @@ public class MyTransformerTest
    * @param name
    *          the name of the test
    */
-  public MyTransformerTest(String name) {
+  public RandomPreprocessingFlowGeneratorTest(String name) {
     super(name);
   }
 
@@ -76,7 +80,7 @@ public class MyTransformerTest
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-
+    
     m_TestHelper.copyResourceToTmp(inputFile);
     m_TestHelper.copyResourceToTmp(trainingFile);
     m_TestHelper.deleteFileFromTmp(outputFile);
@@ -118,11 +122,12 @@ public class MyTransformerTest
     fr.setOutputType(OutputType.DATASET);
 
     WekaClassSelector cs = new WekaClassSelector();
+    
+    RandomPreprocessingFlowGenerator tr = new RandomPreprocessingFlowGenerator();
+    tr.setNumOfFilters(1);
+    tr.setMaxNumOccurrences(1);
 
-    MyTransformer tr = new MyTransformer();
-    tr.setTrainingFile(new TmpFile(trainingFile));
-
-    TemplateTransformer template = new TemplateTransformer();
+    TemplateTransformerNoCache template = new TemplateTransformerNoCache();
     template.setTemplate(tr);
 
     WekaCrossValidationEvaluator cv = new WekaCrossValidationEvaluator();
@@ -131,6 +136,8 @@ public class MyTransformerTest
     WekaEvaluationSummary eval = new WekaEvaluationSummary();
     DumpFile df = new DumpFile();
     df.setOutputFile(new TmpFile(outputFile));
+    
+    //Console df = new Console();
 
     Flow flow = new Flow();
     flow.setActors(new AbstractActor[] {ga, sfs, fr, cs, template, cv, eval, df});
@@ -144,7 +151,20 @@ public class MyTransformerTest
    * @return the test suite
    */
   public static Test suite() {
-    return new TestSuite(MyTransformerTest.class);
+    return new TestSuite(RandomPreprocessingFlowGeneratorTest.class);
+  }
+  
+  @Override
+  protected synchronized void connect() {
+    // TODO Auto-generated method stub
+    //super.connect();
+  }
+  
+  
+  @Override
+  protected synchronized void reconnect(String file) {
+    // TODO Auto-generated method stub
+    //super.reconnect(file);
   }
 
   /**
